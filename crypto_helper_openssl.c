@@ -49,3 +49,45 @@ ngx_str_t* ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
 	ngx_hex_dump(retval->data, hash, sizeof(hash));
 	return retval;
 }
+
+inline ngx_str_t* ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t* datetime) {
+    ngx_str_t *ret_val = ngx_palloc(pool, sizeof(ngx_str_t));
+    ret_val->len = 8;
+    ret_val->data = ngx_palloc(pool, 8);
+
+    ret_val->len = ngx_snprintf(ret_val->data, ret_val->len, "%V",
+                                datetime) - ret_val->data;
+
+    return ret_val;
+}
+
+inline ngx_array_t* get_scope_parts(ngx_pool_t *pool, ngx_str_t* key_scope) {
+    ngx_array_t *settable_scope_array = ngx_array_create(pool, 2, sizeof(ngx_str_t));
+    ngx_str_t *scope_ptr;
+
+    scope_ptr = ngx_array_push(settable_scope_array);
+    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
+    scope_ptr->len = 8;
+    scope_ptr->data = ngx_palloc(pool, 8);
+
+    scope_ptr->len = ngx_snprintf(scope_ptr->data, scope_ptr->len, "%V",
+                                  "20180726") - scope_ptr->data;
+
+    scope_ptr = ngx_array_push(settable_scope_array);
+    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
+    scope_ptr->len = 9;
+    scope_ptr->data = ngx_palloc(pool, 9);
+
+    scope_ptr->len = ngx_snprintf(scope_ptr->data, scope_ptr->len, "%V",
+                                  "us-east-1") - scope_ptr->data;
+
+    //	scope_ptr = ngx_array_push(settable_scope_array);
+//	scope_ptr = "us-east-1";
+//
+//	scope_ptr = ngx_array_push(settable_scope_array);
+//	scope_ptr = "s3";
+//
+//	scope_ptr = ngx_array_push(settable_scope_array);
+//	scope_ptr = "aws4_request";
+    return settable_scope_array;
+}

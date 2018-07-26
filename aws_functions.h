@@ -400,13 +400,22 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(ngx
     const ngx_str_t *s3_endpoint) {
 	struct AwsSignedRequestDetails retval;
 
-	const ngx_str_t *date = ngx_aws_auth__compute_request_time(pool, &req->start_sec);
+	const ngx_str_t *date_time = ngx_aws_auth__compute_request_time(pool, &req->start_sec);
+	const ngx_str_t *date = ngx_aws_auth__get_date(pool, date_time);
+
 	const struct AwsCanonicalRequestDetails canon_request = 
-		ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date, s3_endpoint);
+		ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date_time, s3_endpoint);
+
+	safe_ngx_log_error(req, "canonical details canon_request %V", canon_request.canon_request);
+	safe_ngx_log_error(req, "canonical signed_header_names %V", canon_request.signed_header_names);
+	safe_ngx_log_error(req, "canonical date_time %V", date_time);
+	safe_ngx_log_error(req, "canonical date %V", date);
+	safe_ngx_log_error(req, "canonical key_scope %V", key_scope);
+
 	const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
 
 	// get string to sign
-	const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope, date, canon_request_hash);
+	const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope, date_time, canon_request_hash);
 
 	// generate signature
 	const ngx_str_t *signature = ngx_aws_auth__sign_sha256_hex(pool, string_to_sign, signing_key);
@@ -416,7 +425,6 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(ngx
 	retval.header_list = canon_request.header_list;
 	return retval;
 }
-
 
 // list of header_pair_t
 static inline const ngx_array_t* ngx_aws_auth__sign(ngx_pool_t *pool, ngx_http_request_t *req,
