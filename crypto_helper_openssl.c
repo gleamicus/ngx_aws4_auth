@@ -63,27 +63,33 @@ inline ngx_str_t *ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t *date
 }
 
 inline ngx_array_t *ngx_aws_auth__get_scope_parts(ngx_pool_t *pool, const ngx_str_t *key_scope) {
-    ngx_array_t *settable_scope_array = ngx_array_create(pool, 2, sizeof(ngx_str_t));
-    settable_scope_array->nelts = 2;
+    ngx_array_t *settable_scope_array = ngx_array_create(pool, 0, sizeof(ngx_str_t));
     ngx_str_t *scope_ptr;
 
     scope_ptr = ngx_array_push(settable_scope_array);
     if (scope_ptr == NULL) {
         return settable_scope_array;
     }
-    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
-    scope_ptr->len = 9;
-    scope_ptr->data = ngx_palloc(pool, 9);
-    ngx_memcpy(scope_ptr->data, "20180726", 9);
+//    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
+    scope_ptr->len = 10;
+    scope_ptr->data = ngx_palloc(pool, 10);
+    ngx_memcpy(scope_ptr->data, "us-east-1", 10);
 
     scope_ptr = ngx_array_push(settable_scope_array);
     if (scope_ptr == NULL) {
         return settable_scope_array;
     }
-    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
-    scope_ptr->len = 10;
-    scope_ptr->data = ngx_palloc(pool, 10);
-    ngx_memcpy(scope_ptr->data, "us-east-1", 10);
+    scope_ptr->len = 3;
+    scope_ptr->data = ngx_palloc(pool, 3);
+    ngx_memcpy(scope_ptr->data, "s3", 3);
+
+    scope_ptr = ngx_array_push(settable_scope_array);
+    if (scope_ptr == NULL) {
+        return settable_scope_array;
+    }
+    scope_ptr->len = 13;
+    scope_ptr->data = ngx_palloc(pool, 13);
+    ngx_memcpy(scope_ptr->data, "aws4_request", 13);
 
     char *pch;
 //    int last_position = 0;
