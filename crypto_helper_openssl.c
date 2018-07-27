@@ -15,29 +15,30 @@
 
 #include "crypto_helper.h"
 
-static const EVP_MD* evp_md = NULL;
+static const EVP_MD *evp_md = NULL;
 
-ngx_str_t* ngx_aws_auth__sign_sha256_hex(ngx_pool_t *pool, const ngx_str_t *blob,
-    const ngx_str_t *signing_key) {
+ngx_str_t *ngx_aws_auth__sign_sha256_hex(
+        ngx_pool_t *pool, const ngx_str_t *blob,
+        const ngx_str_t *signing_key) {
 
-    unsigned int      md_len;
-    unsigned char     md[EVP_MAX_MD_SIZE];
-	ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
+    unsigned int md_len;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
 
-    if (evp_md==NULL) {
-       evp_md = EVP_sha256();
+    if (evp_md == NULL) {
+        evp_md = EVP_sha256();
     }
 
     HMAC(evp_md, signing_key->data, signing_key->len, blob->data, blob->len, md, &md_len);
-	retval->data = ngx_palloc(pool, md_len * 2 + 1);
-	retval->len = md_len * 2;
-	ngx_hex_dump(retval->data, md, md_len);
-	return retval;
+    retval->data = ngx_palloc(pool, md_len * 2 + 1);
+    retval->len = md_len * 2;
+    ngx_hex_dump(retval->data, md, md_len);
+    return retval;
 }
 
-ngx_str_t* ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
+ngx_str_t *ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
-	ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
+    ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
 
     SHA256_CTX sha256;
     SHA256_Init(&sha256);
@@ -46,11 +47,11 @@ ngx_str_t* ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
 
     retval->data = ngx_palloc(pool, SHA256_DIGEST_LENGTH * 2 + 1);
     retval->len = SHA256_DIGEST_LENGTH * 2;
-	ngx_hex_dump(retval->data, hash, sizeof(hash));
-	return retval;
+    ngx_hex_dump(retval->data, hash, sizeof(hash));
+    return retval;
 }
 
-inline ngx_str_t* ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t* datetime) {
+inline ngx_str_t *ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t *datetime) {
     ngx_str_t *ret_val = ngx_palloc(pool, sizeof(ngx_str_t));
     ret_val->len = 8;
     ret_val->data = ngx_palloc(pool, 8);
@@ -61,33 +62,36 @@ inline ngx_str_t* ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t* date
     return ret_val;
 }
 
-inline ngx_array_t* get_scope_parts(ngx_pool_t *pool, ngx_str_t* key_scope) {
+inline ngx_array_t *ngx_aws_auth__get_scope_parts(ngx_pool_t *pool, const ngx_str_t *key_scope) {
     ngx_array_t *settable_scope_array = ngx_array_create(pool, 2, sizeof(ngx_str_t));
+    settable_scope_array->nelts = 2;
     ngx_str_t *scope_ptr;
 
     scope_ptr = ngx_array_push(settable_scope_array);
-    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
-    scope_ptr->len = 8;
-    scope_ptr->data = ngx_palloc(pool, 8);
-
-    scope_ptr->len = ngx_snprintf(scope_ptr->data, scope_ptr->len, "%V",
-                                  "20180726") - scope_ptr->data;
-
-    scope_ptr = ngx_array_push(settable_scope_array);
+    if (scope_ptr == NULL) {
+        return settable_scope_array;
+    }
     scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
     scope_ptr->len = 9;
     scope_ptr->data = ngx_palloc(pool, 9);
+    ngx_memcpy(scope_ptr->data, "20180726", 9);
 
-    scope_ptr->len = ngx_snprintf(scope_ptr->data, scope_ptr->len, "%V",
-                                  "us-east-1") - scope_ptr->data;
+    scope_ptr = ngx_array_push(settable_scope_array);
+    if (scope_ptr == NULL) {
+        return settable_scope_array;
+    }
+    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
+    scope_ptr->len = 10;
+    scope_ptr->data = ngx_palloc(pool, 10);
+    ngx_memcpy(scope_ptr->data, "us-east-1", 10);
 
-    //	scope_ptr = ngx_array_push(settable_scope_array);
-//	scope_ptr = "us-east-1";
-//
-//	scope_ptr = ngx_array_push(settable_scope_array);
-//	scope_ptr = "s3";
-//
-//	scope_ptr = ngx_array_push(settable_scope_array);
-//	scope_ptr = "aws4_request";
+    char *pch;
+//    int last_position = 0;
+
+    pch = ngx_strchr(key_scope, '/');
+    while (pch != NULL) {
+        pch = ngx_strchr(pch + 1, '/');
+    }
+
     return settable_scope_array;
 }

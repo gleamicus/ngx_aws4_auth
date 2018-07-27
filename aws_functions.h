@@ -406,11 +406,22 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(ngx
 	const struct AwsCanonicalRequestDetails canon_request = 
 		ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date_time, s3_endpoint);
 
+	const ngx_array_t *scope_parts = ngx_aws_auth__get_scope_parts(pool, key_scope);
+
 	safe_ngx_log_error(req, "canonical details canon_request %V", canon_request.canon_request);
 	safe_ngx_log_error(req, "canonical signed_header_names %V", canon_request.signed_header_names);
 	safe_ngx_log_error(req, "canonical date_time %V", date_time);
 	safe_ngx_log_error(req, "canonical date %V", date);
 	safe_ngx_log_error(req, "canonical key_scope %V", key_scope);
+
+	ngx_str_t *value;
+	value = scope_parts->elts;
+	safe_ngx_log_error(req, "key_scope elts %V", scope_parts->elts);
+//	safe_ngx_log_error(req, "key_scope nelts %V", scope_parts->nelts);
+
+//	for (ngx_uint_t i = 0; i < scope_parts->nelts; i++) {
+//		//safe_ngx_log_error(req, "scope_parts %V", value[i]);
+//	}
 
 	const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
 
