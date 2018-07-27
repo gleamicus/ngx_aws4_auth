@@ -64,40 +64,39 @@ inline ngx_str_t *ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t *date
 
 inline ngx_array_t *ngx_aws_auth__get_scope_parts(ngx_pool_t *pool, const ngx_str_t *key_scope) {
     ngx_array_t *settable_scope_array = ngx_array_create(pool, 0, sizeof(ngx_str_t));
+    if (key_scope == NULL || key_scope->len == 0) {
+        return settable_scope_array;
+    }
+
     ngx_str_t *scope_ptr;
-
-    scope_ptr = ngx_array_push(settable_scope_array);
-    if (scope_ptr == NULL) {
-        return settable_scope_array;
-    }
-//    scope_ptr = ngx_palloc(pool, sizeof(ngx_str_t));
-    scope_ptr->len = 10;
-    scope_ptr->data = ngx_palloc(pool, 10);
-    ngx_memcpy(scope_ptr->data, "us-east-1", 10);
-
-    scope_ptr = ngx_array_push(settable_scope_array);
-    if (scope_ptr == NULL) {
-        return settable_scope_array;
-    }
-    scope_ptr->len = 3;
-    scope_ptr->data = ngx_palloc(pool, 3);
-    ngx_memcpy(scope_ptr->data, "s3", 3);
-
-    scope_ptr = ngx_array_push(settable_scope_array);
-    if (scope_ptr == NULL) {
-        return settable_scope_array;
-    }
-    scope_ptr->len = 13;
-    scope_ptr->data = ngx_palloc(pool, 13);
-    ngx_memcpy(scope_ptr->data, "aws4_request", 13);
-
-    char *pch;
-//    int last_position = 0;
-
-    pch = ngx_strchr(key_scope, '/');
+    char *pch, *prev_pch;
+    int prev_position = 0;
+    int position = 0;
+    prev_pch = (char *) key_scope->data;
+    pch = ngx_strchr(key_scope->data, '/');
     while (pch != NULL) {
+        position = (u_char *) pch - key_scope->data;
+
+        scope_ptr = ngx_array_push(settable_scope_array);
+        if (scope_ptr == NULL) {
+            return settable_scope_array;
+        }
+
+        scope_ptr->len = position - prev_position;
+        scope_ptr->data = (u_char *) prev_pch;
+
+        prev_position = position + 1;
+        prev_pch = pch + 1;
         pch = ngx_strchr(pch + 1, '/');
     }
+
+    scope_ptr = ngx_array_push(settable_scope_array);
+    if (scope_ptr == NULL) {
+        return settable_scope_array;
+    }
+
+    scope_ptr->len = key_scope->len - prev_position + 1;
+    scope_ptr->data = (u_char *) prev_pch;
 
     return settable_scope_array;
 }

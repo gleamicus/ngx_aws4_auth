@@ -414,10 +414,10 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(ngx
 	safe_ngx_log_error(req, "canonical date %V", date);
 	safe_ngx_log_error(req, "canonical key_scope %V", key_scope);
 
-	ngx_str_t *value = (ngx_str_t *) scope_parts;
-	for (ngx_uint_t i = 0; i < scope_parts->nelts; i++) {
+	ngx_uint_t i = 0;
+	for (; i < scope_parts->nelts; ++i) {
 		safe_ngx_log_error(req, "canonical key_scope %d", i);
-		safe_ngx_log_error(req, "scope_parts %V", value[i]);
+		safe_ngx_log_error(req, "scope_parts %V", (u_char *) scope_parts->elts + scope_parts->size *i);
 	}
 
 	const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
