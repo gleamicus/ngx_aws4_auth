@@ -30,9 +30,28 @@ ngx_str_t *ngx_aws_auth__sign_sha256_hex(
     }
 
     HMAC(evp_md, signing_key->data, signing_key->len, blob->data, blob->len, md, &md_len);
-    retval->data = ngx_palloc(pool, md_len * 2 + 1);
+    retval->data = ngx_palloc(pool, md_len * 2);
     retval->len = md_len * 2;
     ngx_hex_dump(retval->data, md, md_len);
+    return retval;
+}
+
+ngx_str_t *ngx_aws_auth__sign_hmac_sha256(
+        ngx_pool_t *pool, const ngx_str_t *blob,
+        const ngx_str_t *signing_key) {
+
+    unsigned int md_len;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
+
+    if (evp_md == NULL) {
+        evp_md = EVP_sha256();
+    }
+
+    HMAC(evp_md, signing_key->data, signing_key->len, blob->data, blob->len, md, &md_len);
+    retval->data = ngx_palloc(pool, md_len);
+    retval->len = md_len;
+    ngx_memcpy(retval->data, md, md_len);
     return retval;
 }
 
@@ -45,58 +64,8 @@ ngx_str_t *ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
     SHA256_Update(&sha256, blob->data, blob->len);
     SHA256_Final(hash, &sha256);
 
-    retval->data = ngx_palloc(pool, SHA256_DIGEST_LENGTH * 2 + 1);
+    retval->data = ngx_palloc(pool, SHA256_DIGEST_LENGTH * 2);
     retval->len = SHA256_DIGEST_LENGTH * 2;
     ngx_hex_dump(retval->data, hash, sizeof(hash));
     return retval;
-}
-
-inline ngx_str_t *ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_t *datetime) {
-    ngx_str_t *ret_val = ngx_palloc(pool, sizeof(ngx_str_t));
-    ret_val->len = 8;
-    ret_val->data = ngx_palloc(pool, 8);
-
-    ret_val->len = ngx_snprintf(ret_val->data, ret_val->len, "%V",
-                                datetime) - ret_val->data;
-
-    return ret_val;
-}
-
-inline ngx_array_t *ngx_aws_auth__get_scope_parts(ngx_pool_t *pool, const ngx_str_t *key_scope) {
-    ngx_array_t *settable_scope_array = ngx_array_create(pool, 0, sizeof(ngx_str_t));
-    if (key_scope == NULL || key_scope->len == 0) {
-        return settable_scope_array;
-    }
-
-    ngx_str_t *scope_ptr;
-    char *pch, *prev_pch;
-    int prev_position = 0;
-    int position = 0;
-    prev_pch = (char *) key_scope->data;
-    pch = ngx_strchr(key_scope->data, '/');
-    while (pch != NULL) {
-        position = (u_char *) pch - key_scope->data;
-
-        scope_ptr = ngx_array_push(settable_scope_array);
-        if (scope_ptr == NULL) {
-            return settable_scope_array;
-        }
-
-        scope_ptr->len = position - prev_position;
-        scope_ptr->data = (u_char *) prev_pch;
-
-        prev_position = position + 1;
-        prev_pch = pch + 1;
-        pch = ngx_strchr(pch + 1, '/');
-    }
-
-    scope_ptr = ngx_array_push(settable_scope_array);
-    if (scope_ptr == NULL) {
-        return settable_scope_array;
-    }
-
-    scope_ptr->len = key_scope->len - prev_position + 1;
-    scope_ptr->data = (u_char *) prev_pch;
-
-    return settable_scope_array;
 }
