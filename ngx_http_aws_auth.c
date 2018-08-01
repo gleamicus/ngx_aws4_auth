@@ -163,6 +163,10 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
                                                         &conf->access_key, &conf->signing_key, &conf->key_scope,
                                                         &conf->bucket_name, &conf->endpoint);
 
+    if (headers_out == NULL) {
+        return NGX_ERROR;
+    }
+
     ngx_uint_t i;
     for (i = 0; i < headers_out->nelts; i++) {
         hv = (header_pair_t *) ((u_char *) headers_out->elts + headers_out->size * i);

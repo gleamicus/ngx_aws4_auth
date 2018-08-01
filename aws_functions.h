@@ -417,44 +417,40 @@ static inline ngx_str_t *ngx_aws_auth__get_date(ngx_pool_t *pool, const ngx_str_
     return ret_val;
 }
 
-static inline ngx_array_t *
-ngx_aws_auth__get_scope_parts(ngx_pool_t *pool, const ngx_http_request_t *req, const ngx_str_t *key_scope) {
-    ngx_array_t *settable_scope_array = ngx_array_create(pool, 0, sizeof(ngx_str_t));
-    if (key_scope == NULL || key_scope->len == 0) {
-        safe_ngx_log_error(req, "no key_scope defined");
-        return settable_scope_array;
-    }
-
-    ngx_str_t *scope_ptr;
+static inline ngx_str_t *
+ngx_aws_auth__get_signing(
+        ngx_pool_t *pool, const ngx_http_request_t *req, const ngx_str_t *key_scope_with_date,
+        const ngx_str_t *signing_key) {
+    ngx_str_t *step_binary = NULL;
     char *pch, *prev_pch;
     int prev_position = 0;
     int position = 0;
-    prev_pch = (char *) key_scope->data;
-    pch = ngx_strchr(key_scope->data, '/');
+    prev_pch = (char *) key_scope_with_date->data;
+    pch = ngx_strchr(key_scope_with_date->data, '/');
+    int i = 0;
     while (pch != NULL) {
-        position = (u_char *) pch - key_scope->data;
+        position = (u_char *) pch - key_scope_with_date->data;
 
-        scope_ptr = ngx_array_push(settable_scope_array);
-        if (scope_ptr == NULL) {
-            return settable_scope_array;
+        if (i == 0) {
+            step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch, position - prev_position,
+                                                                   signing_key);
+        } else {
+            step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch, position - prev_position,
+                                                                   step_binary);
         }
-
-        scope_ptr->len = position - prev_position;
-        scope_ptr->data = (u_char *) prev_pch;
 
         prev_position = position + 1;
         prev_pch = pch + 1;
         pch = ngx_strchr(pch + 1, '/');
+        ++i;
     }
 
-    scope_ptr = ngx_array_push(settable_scope_array);
-    if (scope_ptr == NULL) {
-        return settable_scope_array;
+    if (step_binary != NULL) {
+        step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch,
+                                                               key_scope_with_date->len - prev_position, step_binary);
     }
 
-    scope_ptr->len = key_scope->len - prev_position;
-    scope_ptr->data = (u_char *) prev_pch;
-    return settable_scope_array;
+    return step_binary;
 }
 
 static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
@@ -466,35 +462,21 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
         const ngx_str_t *date_time) {
     struct AwsSignedRequestDetails retval;
 
+    if (key_scope_with_date == NULL || key_scope_with_date->len == 0) {
+        safe_ngx_log_error(req, "no key_scope defined");
+        retval.signature = NULL;
+        return retval;
+    }
+
     const struct AwsCanonicalRequestDetails canon_request =
             ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date_time, s3_endpoint);
 
-    const ngx_array_t *scope_parts = ngx_aws_auth__get_scope_parts(pool, req, key_scope_with_date);
-    if (scope_parts->nelts < 4) {
-        safe_ngx_log_error(req, "memory error: can't parse key_scope");
-        retval.signature = &EMPTY_STRING_SHA256;
-        return retval;
-    }
     const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
+    safe_ngx_log_error(req, "canon_request.canon_request: %V", canon_request.canon_request);
+
     const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope_with_date, date_time,
                                                                    canon_request_hash);
-
-    const ngx_str_t *kDateBinary = ngx_aws_auth__sign_hmac_sha256(pool,
-                                                                  &((const ngx_str_t *) scope_parts->elts)[0],
-                                                                  signing_key);
-
-    const ngx_str_t *kRegionBinary = ngx_aws_auth__sign_hmac_sha256(pool,
-                                                                    &((const ngx_str_t *) scope_parts->elts)[1],
-                                                                    kDateBinary);
-
-    const ngx_str_t *kServiceBinary = ngx_aws_auth__sign_hmac_sha256(pool,
-                                                                     &((const ngx_str_t *) scope_parts->elts)[2],
-                                                                     kRegionBinary);
-
-    const ngx_str_t *kSigningBinary = ngx_aws_auth__sign_hmac_sha256(pool,
-                                                                     &((const ngx_str_t *) scope_parts->elts)[3],
-                                                                     kServiceBinary);
-
+    const ngx_str_t *kSigningBinary = ngx_aws_auth__get_signing(pool, req, key_scope_with_date, signing_key);
     const ngx_str_t *signature = ngx_aws_auth__sign_sha256_hex(pool, string_to_sign, kSigningBinary);
 
     retval.signature = signature;
@@ -526,7 +508,9 @@ static inline const ngx_array_t *ngx_aws_auth__sign(
                                                                                              key_scope_with_date,
                                                                                              s3_bucket_name,
                                                                                              s3_endpoint, date_time);
-
+    if (signature_details.signature == NULL) {
+        return NULL;
+    }
 
     const ngx_str_t *auth_header_value = ngx_aws_auth__make_auth_token(pool, signature_details.signature,
                                                                        signature_details.signed_header_names,
