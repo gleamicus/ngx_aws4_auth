@@ -163,9 +163,6 @@ static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
         retval->len++;
     }
     retval->len--;
-
-    safe_ngx_log_error(req, "canonical qs constructed is %V", retval);
-
     return retval;
 }
 
@@ -333,12 +330,8 @@ static inline const ngx_str_t *ngx_aws_auth__canon_url(ngx_pool_t *pool, const n
     ngx_memcpy(retval->data, req_uri_data, req_uri_len);
     retval->len = req_uri_len;
 
-    safe_ngx_log_error(req, "canonical url extracted before URI encoding is %V", retval);
-
     // then URI-encode it per RFC 3986
     ngx_aws_auth__escape_uri(pool, retval);
-    safe_ngx_log_error(req, "canonical url extracted after URI encoding is %V", retval);
-
     return retval;
 }
 
@@ -472,7 +465,7 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
             ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date_time, s3_endpoint);
 
     const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
-    safe_ngx_log_error(req, "canon_request.canon_request: %V", canon_request.canon_request);
+//    safe_ngx_log_error(req, "canon_request.canon_request: %V", canon_request.canon_request);
 
     const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope_with_date, date_time,
                                                                    canon_request_hash);
@@ -486,7 +479,7 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
 }
 
 // list of header_pair_t
-static inline const ngx_array_t *ngx_aws_auth__sign(
+static inline const ngx_array_t *ngx_aws_auth__sign_v4(
         ngx_pool_t *pool, ngx_http_request_t *req,
         const ngx_str_t *access_key_id,
         const ngx_str_t *signing_key,
