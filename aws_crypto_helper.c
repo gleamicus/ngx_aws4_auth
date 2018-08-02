@@ -13,7 +13,7 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 
-#include "crypto_helper.h"
+#include "aws_crypto_helper.h"
 
 static const EVP_MD *evp_md = NULL;
 

@@ -1,17 +1,10 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+
+#include "aws_vars.h"
 #include "aws_functions.h"
-
-#define AWS_S3_VARIABLE "s3_auth_token"
-#define AWS_DATE_VARIABLE "aws_date"
-
-//static const ngx_str_t AWS_SIGNATURE_VERSION4_STRING = ngx_string("v4");
-//
-//typedef struct {
-//    unsigned done:1;
-//    unsigned waiting_more_body:1;
-//} ngx_http_data_input_ctx_t;
+#include "aws_http_data_functions.h"
 
 static void *ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf);
 
@@ -23,17 +16,18 @@ static char *ngx_http_aws_endpoint(ngx_conf_t *cf, ngx_command_t *cmd, void *con
 
 static char *ngx_http_aws_sign(ngx_conf_t *cf, ngx_command_t *cmd, void *conf);
 
+void ngx_http_data_read(ngx_http_request_t *r);
+
 typedef struct {
     ngx_str_t access_key;
     ngx_str_t key_scope;
-    ngx_str_t signature_version;
     ngx_str_t signing_key;
     ngx_str_t signing_key_decoded;
     ngx_str_t endpoint;
     ngx_str_t bucket_name;
     ngx_uint_t enabled;
+    ngx_str_t signature_version;
 } ngx_http_aws_auth_conf_t;
-
 
 static ngx_command_t ngx_http_aws_auth_commands[] = {
         { ngx_string("aws_access_key"),
@@ -78,12 +72,12 @@ static ngx_command_t ngx_http_aws_auth_commands[] = {
           0,
           NULL },
 
-//        { ngx_string("aws_signature_version"),
-//          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-//          ngx_conf_set_str_slot,
-//          NGX_HTTP_LOC_CONF_OFFSET,
-//          offsetof(ngx_http_aws_auth_conf_t, signature_version),
-//          NULL },
+        { ngx_string("aws_version"),
+          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+          ngx_conf_set_str_slot,
+          NGX_HTTP_LOC_CONF_OFFSET,
+          offsetof(ngx_http_aws_auth_conf_t, signature_version),
+          NULL },
 
         ngx_null_command
 };
@@ -125,7 +119,6 @@ ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf) {
     conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_aws_auth_conf_t));
     conf->enabled = 0;
     ngx_str_set(&conf->endpoint, "s3.amazonaws.com");
-//    ngx_str_set(&conf->signature_version, "v4");
     if (conf == NULL) {
         return NGX_CONF_ERROR;
     }
@@ -143,7 +136,7 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");
     ngx_conf_merge_str_value(conf->endpoint, prev->endpoint, "s3.amazonaws.com");
     ngx_conf_merge_str_value(conf->bucket_name, prev->bucket_name, "");
-//    ngx_conf_merge_str_value(conf->signature_version, prev->signature_version, "");
+    ngx_conf_merge_str_value(conf->signature_version, prev->signature_version, "");
 
     if (conf->signing_key_decoded.data == NULL) {
         conf->signing_key_decoded.data = ngx_pcalloc(cf->pool, 100);
@@ -161,6 +154,23 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     return NGX_CONF_OK;
 }
 
+inline void ngx_http_data_read(ngx_http_request_t *r) {
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read body");
+    ngx_http_data_input_ctx_t *ctx = ngx_http_get_module_ctx(r, ngx_http_aws_auth_module);
+    ctx->done = 1;
+
+#if defined(nginx_version) && nginx_version >= 8011
+    r->main->count--;
+#endif
+
+    /* waiting_more_body my rewrite phase handler */
+    if (ctx->waiting_more_body) {
+        ctx->waiting_more_body = 0;
+
+        ngx_http_core_run_phases(r);
+    }
+}
+
 static ngx_int_t
 ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     ngx_http_aws_auth_conf_t *conf = ngx_http_get_module_loc_conf(r, ngx_http_aws_auth_module);
@@ -169,10 +179,44 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         return NGX_DECLINED;
     }
 
-//    if (ngx_strncmp(&conf->signature_version, &AWS_SIGNATURE_VERSION4_STRING, 2) != 0) {
-//        /* return directly if saws signature version is not v4 */
-//        return NGX_DECLINED;
-//    }
+    if (ngx_strncmp(conf->signature_version.data, AWS_SIGNATURE_VERSION4_STRING.data, 2) != 0) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: only aws signature v4 is supported");
+        /* return directly if saws signature version is not v4 */
+        return NGX_ERROR;
+    }
+
+    if (r->method == NGX_HTTP_POST || r->method == NGX_HTTP_PUT) {
+        // todo add body read handler
+        if (r->headers_in.content_type == NULL || r->headers_in.content_type->value.data == NULL) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: no Content-Type header found");
+            return NGX_ERROR;
+        }
+        ngx_http_data_input_ctx_t *ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_data_input_ctx_t));
+        ngx_int_t rc;
+        if (ctx == NULL) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: can't allocate memory for ctx");
+            return NGX_ERROR;
+        }
+
+        ngx_http_set_ctx(r, ctx, ngx_http_aws_auth_module);
+
+        rc = ngx_http_read_client_request_body(r, ngx_http_data_read);
+
+        if (rc == NGX_ERROR || rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+#if (nginx_version < 1002006) || \
+        (nginx_version >= 1003000 && nginx_version < 1003009)
+            r->main->count--;
+#endif
+
+            return rc;
+        }
+
+        if (rc == NGX_AGAIN) {
+            ctx->waiting_more_body = 1;
+
+            return NGX_DONE;
+        }
+    }
 
     ngx_table_elt_t *h;
     header_pair_t *hv;
@@ -216,7 +260,7 @@ ngx_http_aws_endpoint(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
 
     ngx_str_t *field, *value;
 
-    field = (ngx_str_t *)(p + cmd->offset);
+    field = (ngx_str_t * )(p + cmd->offset);
 
     value = cf->args->elts;
 
@@ -255,7 +299,7 @@ ngx_aws_auth_req_init(ngx_conf_t *cf) {
 
     return NGX_OK;
 }
-/* 
+/*
  * vim: ts=4 sw=4 et
  */
 

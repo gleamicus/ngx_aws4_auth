@@ -28,7 +28,7 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-#include "crypto_helper.h"
+#include "aws_crypto_helper.h"
 
 #define AMZ_DATE_MAX_LEN 20
 #define STRING_TO_SIGN_LENGTH 3000
@@ -438,7 +438,7 @@ ngx_aws_auth__get_signing(
         ++i;
     }
 
-    if (step_binary != NULL) {
+    if (step_binary != NULL && prev_pch != NULL) {
         step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch,
                                                                key_scope_with_date->len - prev_position, step_binary);
     }
