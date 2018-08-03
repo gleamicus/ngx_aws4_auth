@@ -1,10 +1,10 @@
+
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
 
 #include "aws_vars.h"
 #include "aws_functions.h"
-#include "aws_http_data_functions.h"
 
 static void *ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf);
 
@@ -155,20 +155,47 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
 }
 
 inline void ngx_http_data_read(ngx_http_request_t *r) {
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read body");
+    off_t len;
+    ngx_chain_t *in;
+    u_char *last_body_chain;
+
     ngx_http_data_input_ctx_t *ctx = ngx_http_get_module_ctx(r, ngx_http_aws_auth_module);
-    ctx->done = 1;
+    if (ctx == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: can't get context");
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
 
-#if defined(nginx_version) && nginx_version >= 8011
-    r->main->count--;
-#endif
+    if (r->request_body == NULL) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: body is null");
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
 
-    /* waiting_more_body my rewrite phase handler */
     if (ctx->waiting_more_body) {
         ctx->waiting_more_body = 0;
 
         ngx_http_core_run_phases(r);
+        return;
     }
+
+    len = 0;
+    for (in = r->request_body->bufs; in; in = in->next) {
+        len += ngx_buf_size(in->buf);
+    }
+
+    ctx->len = len;
+
+    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "one buffer found %d", r->request_body->bufs->buf->last_buf);
+
+    ctx->body_sha256 = ngx_palloc(r->pool, sizeof(ngx_str_t));
+    ctx->body_sha256->len = len;
+    ctx->body_sha256->data = ngx_palloc(r->pool, len);
+    last_body_chain = ctx->body_sha256->data;
+    for (in = r->request_body->bufs; in; in = in->next) {
+        last_body_chain = ngx_copy(last_body_chain, in->buf->pos, in->buf->last - in->buf->pos);
+    }
+    ngx_http_finalize_request(r, NGX_OK);
 }
 
 static ngx_int_t
@@ -181,21 +208,26 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
 
     if (ngx_strncmp(conf->signature_version.data, AWS_SIGNATURE_VERSION4_STRING.data, 2) != 0) {
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: only aws signature v4 is supported");
-        /* return directly if saws signature version is not v4 */
-        return NGX_ERROR;
+        return NGX_DECLINED;
     }
 
-    if (r->method == NGX_HTTP_POST || r->method == NGX_HTTP_PUT) {
-        // todo add body read handler
+    if (r->method == NGX_HTTP_POST) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: POST request hasn't been supported yet");
+        return NGX_DECLINED;
+    }
+
+    ngx_http_data_input_ctx_t *ctx = NULL;
+
+    if (r->method == NGX_HTTP_PUT) {
         if (r->headers_in.content_type == NULL || r->headers_in.content_type->value.data == NULL) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: no Content-Type header found");
-            return NGX_ERROR;
+            return NGX_DECLINED;
         }
-        ngx_http_data_input_ctx_t *ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_data_input_ctx_t));
+        ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_data_input_ctx_t));
         ngx_int_t rc;
         if (ctx == NULL) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: can't allocate memory for ctx");
-            return NGX_ERROR;
+            return NGX_DECLINED;
         }
 
         ngx_http_set_ctx(r, ctx, ngx_http_aws_auth_module);
@@ -203,17 +235,12 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         rc = ngx_http_read_client_request_body(r, ngx_http_data_read);
 
         if (rc == NGX_ERROR || rc >= NGX_HTTP_SPECIAL_RESPONSE) {
-#if (nginx_version < 1002006) || \
-        (nginx_version >= 1003000 && nginx_version < 1003009)
-            r->main->count--;
-#endif
-
+            ngx_http_finalize_request(r, NGX_ERROR);
             return rc;
         }
 
         if (rc == NGX_AGAIN) {
             ctx->waiting_more_body = 1;
-
             return NGX_DONE;
         }
     }
@@ -222,6 +249,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     header_pair_t *hv;
 
     const ngx_array_t *headers_out = ngx_aws_auth__sign_v4(r->pool, r,
+                                                           ctx,
                                                            &conf->access_key, &conf->signing_key, &conf->key_scope,
                                                            &conf->bucket_name, &conf->endpoint);
 
@@ -251,6 +279,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         h->lowcase_key = hv->key.data; /* We ensure that header names are already lowercased */
         h->value = hv->value;
     }
+
     return NGX_OK;
 }
 

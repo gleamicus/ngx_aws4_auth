@@ -4,7 +4,7 @@
 
 #include "vendor/cmocka/include/cmocka.h"
 
-#include "aws_functions.h"
+#include "src/aws_functions.h"
 
 ngx_pool_t *pool;
 

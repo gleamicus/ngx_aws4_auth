@@ -28,10 +28,8 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
+#include "aws_vars.h"
 #include "aws_crypto_helper.h"
-
-#define AMZ_DATE_MAX_LEN 20
-#define STRING_TO_SIGN_LENGTH 3000
 
 typedef ngx_keyval_t header_pair_t;
 
@@ -52,21 +50,6 @@ struct AwsSignedRequestDetails {
     const ngx_str_t *signed_header_names;
     ngx_array_t *header_list; // list of header_pair_t
 };
-
-// mainly useful to avoid having to full instantiate request structures for
-// tests...
-#define safe_ngx_log_error(req, ...)                                  \
-  if (req->connection) {                                              \
-    ngx_log_error(NGX_LOG_ERR, req->connection->log, 0, __VA_ARGS__); \
-  }
-
-static const ngx_str_t EMPTY_STRING_SHA256 = ngx_string(
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-static const ngx_str_t EMPTY_STRING = ngx_null_string;
-static const ngx_str_t AMZ_HASH_HEADER = ngx_string("x-amz-content-sha256");
-static const ngx_str_t AMZ_DATE_HEADER = ngx_string("x-amz-date");
-static const ngx_str_t HOST_HEADER = ngx_string("host");
-static const ngx_str_t AUTHZ_HEADER = ngx_string("authorization");
 
 static inline char *__CHAR_PTR_U(u_char *ptr) { return (char *) ptr; }
 
@@ -253,9 +236,12 @@ static inline struct AwsCanonicalHeaderDetails ngx_aws_auth__canonize_headers(
 
 static inline const ngx_str_t *ngx_aws_auth__request_body_hash(
         ngx_pool_t *pool,
-        const ngx_http_request_t *req) {
-    /* TODO: support cases involving non-empty body */
-    return &EMPTY_STRING_SHA256;
+        const ngx_http_request_t *req, ngx_http_data_input_ctx_t *ctx) {
+    if (ctx == NULL || ctx->body_sha256 == NULL) {
+        return &EMPTY_STRING_SHA256;
+    }
+
+    return ngx_aws_auth__hash_sha256(pool, ctx->body_sha256);
 }
 
 // AWS wants a peculiar kind of URI-encoding: they want RFC 3986, except that
@@ -338,6 +324,7 @@ static inline const ngx_str_t *ngx_aws_auth__canon_url(ngx_pool_t *pool, const n
 static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_request(
         ngx_pool_t *pool,
         const ngx_http_request_t *req,
+        ngx_http_data_input_ctx_t *ctx,
         const ngx_str_t *s3_bucket_name, const ngx_str_t *amz_date, const ngx_str_t *s3_endpoint) {
     struct AwsCanonicalRequestDetails retval;
 
@@ -345,7 +332,7 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
     const ngx_str_t *canon_qs = ngx_aws_auth__canonize_query_string(pool, req);
 
     // compute request body hash
-    const ngx_str_t *request_body_hash = ngx_aws_auth__request_body_hash(pool, req);
+    const ngx_str_t *request_body_hash = ngx_aws_auth__request_body_hash(pool, req, ctx);
 
     const struct AwsCanonicalHeaderDetails canon_headers =
             ngx_aws_auth__canonize_headers(pool, req, s3_bucket_name, amz_date, request_body_hash, s3_endpoint);
@@ -448,6 +435,7 @@ ngx_aws_auth__get_signing(
 
 static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
         ngx_pool_t *pool, ngx_http_request_t *req,
+        ngx_http_data_input_ctx_t *ctx,
         const ngx_str_t *signing_key,
         const ngx_str_t *key_scope_with_date,
         const ngx_str_t *s3_bucket_name,
@@ -456,17 +444,15 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
     struct AwsSignedRequestDetails retval;
 
     if (key_scope_with_date == NULL || key_scope_with_date->len == 0) {
-        safe_ngx_log_error(req, "no key_scope defined");
+        ngx_log_error(NGX_LOG_ERR, req->connection->log, 0, "aws_sign module: no key_scope defined");
         retval.signature = NULL;
         return retval;
     }
 
     const struct AwsCanonicalRequestDetails canon_request =
-            ngx_aws_auth__make_canonical_request(pool, req, s3_bucket_name, date_time, s3_endpoint);
+            ngx_aws_auth__make_canonical_request(pool, req, ctx, s3_bucket_name, date_time, s3_endpoint);
 
     const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
-//    safe_ngx_log_error(req, "canon_request.canon_request: %V", canon_request.canon_request);
-
     const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope_with_date, date_time,
                                                                    canon_request_hash);
     const ngx_str_t *kSigningBinary = ngx_aws_auth__get_signing(pool, req, key_scope_with_date, signing_key);
@@ -481,6 +467,7 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
 // list of header_pair_t
 static inline const ngx_array_t *ngx_aws_auth__sign_v4(
         ngx_pool_t *pool, ngx_http_request_t *req,
+        ngx_http_data_input_ctx_t *ctx,
         const ngx_str_t *access_key_id,
         const ngx_str_t *signing_key,
         const ngx_str_t *key_scope,
@@ -497,7 +484,8 @@ static inline const ngx_array_t *ngx_aws_auth__sign_v4(
             ngx_snprintf(key_scope_with_date->data, key_scope_with_date->len, "%V/%V", date, key_scope) -
             key_scope_with_date->data;
 
-    const struct AwsSignedRequestDetails signature_details = ngx_aws_auth__compute_signature(pool, req, signing_key,
+    const struct AwsSignedRequestDetails signature_details = ngx_aws_auth__compute_signature(pool, req, ctx,
+                                                                                             signing_key,
                                                                                              key_scope_with_date,
                                                                                              s3_bucket_name,
                                                                                              s3_endpoint, date_time);
