@@ -30,23 +30,6 @@ Implements proxying of authenticated requests to S3.
         server bucket2.s3.somedomain.ru weight=1 fail_timeout=1s;
     }
 
-    location / {
-	  aws_sign;
-      proxy_pass http://your_s3_bucket.s3.amazonaws.com;
-    }
-
-    # This is an example that does not use the server root for the proxy root
-    location /myfiles {
-	
-      rewrite /myfiles/(.*) /$1 break;
-      proxy_pass http://your_s3_bucket.s3.amazonaws.com/$1;
-
-
-      aws_access_key your_aws_access_key;
-      aws_key_scope scope_of_generated_signing_key;
-      aws_signing_key signing_key_generated_using_script;
-    }
-
     # This is an example that use specific s3 endpoint, default endpoint is s3.amazonaws.com
     location /s3_beijing {
       client_max_body_size 100m;
