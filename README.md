@@ -36,7 +36,7 @@ Implements proxying of authenticated requests to S3.
     }
 
     # This is an example that does not use the server root for the proxy root
-	location /myfiles {
+    location /myfiles {
 	
       rewrite /myfiles/(.*) /$1 break;
       proxy_pass http://your_s3_bucket.s3.amazonaws.com/$1;
@@ -48,7 +48,7 @@ Implements proxying of authenticated requests to S3.
     }
 
     # This is an example that use specific s3 endpoint, default endpoint is s3.amazonaws.com
-	location /s3_beijing {
+    location /s3_beijing {
       client_max_body_size 100m;
       client_body_buffer_size 1m;
 	
