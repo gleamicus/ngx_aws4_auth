@@ -136,7 +136,7 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");
     ngx_conf_merge_str_value(conf->endpoint, prev->endpoint, "s3.amazonaws.com");
     ngx_conf_merge_str_value(conf->bucket_name, prev->bucket_name, "");
-    ngx_conf_merge_str_value(conf->signature_version, prev->signature_version, "");
+    ngx_conf_merge_str_value(conf->signature_version, prev->signature_version, "v4");
 
     if (conf->signing_key_decoded.data == NULL) {
         conf->signing_key_decoded.data = ngx_pcalloc(cf->pool, 100);
@@ -186,14 +186,46 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
 
     ctx->len = len;
 
-    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "one buffer found %d", r->request_body->bufs->buf->last_buf);
-
     ctx->body_sha256 = ngx_palloc(r->pool, sizeof(ngx_str_t));
     ctx->body_sha256->len = len;
     ctx->body_sha256->data = ngx_palloc(r->pool, len);
     last_body_chain = ctx->body_sha256->data;
     for (in = r->request_body->bufs; in; in = in->next) {
-        last_body_chain = ngx_copy(last_body_chain, in->buf->pos, in->buf->last - in->buf->pos);
+        if (!in->buf->in_file) {
+            last_body_chain = ngx_copy(last_body_chain, in->buf->pos, in->buf->last - in->buf->pos);
+            continue;
+        }
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "send data: in-file buffer found. aborted. "
+                      "consider increasing your "
+                      "client_body_buffer_size setting");
+        ngx_buf_t *b = ngx_create_temp_buf(r->pool, NGX_OFF_T_LEN);
+        if (b == NULL) {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
+        b->last = ngx_sprintf(b->pos, "%O", 0);
+        b->last_buf = (r == r->main) ? 1 : 0;
+        b->last_in_chain = 1;
+
+        r->headers_out.status = NGX_HTTP_REQUEST_ENTITY_TOO_LARGE;
+        r->headers_out.content_length_n = 0;
+
+        ngx_int_t rc = ngx_http_send_header(r);
+
+        if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) {
+            ngx_http_finalize_request(r, rc);
+            return;
+        }
+
+        ngx_chain_t out;
+        out.buf = b;
+        out.next = NULL;
+
+        rc = ngx_http_output_filter(r, &out);
+        ngx_http_finalize_request(r, rc);
+        return;
     }
     ngx_http_finalize_request(r, NGX_OK);
 }
