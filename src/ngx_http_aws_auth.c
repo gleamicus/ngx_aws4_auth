@@ -27,6 +27,8 @@ typedef struct {
     ngx_str_t bucket_name;
     ngx_uint_t enabled;
     ngx_str_t signature_version;
+    ngx_flag_t virtual_hosted_style_url;
+    ngx_flag_t path_style_url;
 } ngx_http_aws_auth_conf_t;
 
 static ngx_command_t ngx_http_aws_auth_commands[] = {
@@ -58,7 +60,7 @@ static ngx_command_t ngx_http_aws_auth_commands[] = {
           offsetof(ngx_http_aws_auth_conf_t, endpoint),
           NULL },
 
-        { ngx_string("aws_s3_bucket"),
+        { ngx_string("aws_bucket"),
           NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
           ngx_conf_set_str_slot,
           NGX_HTTP_LOC_CONF_OFFSET,
@@ -79,7 +81,19 @@ static ngx_command_t ngx_http_aws_auth_commands[] = {
           offsetof(ngx_http_aws_auth_conf_t, signature_version),
           NULL },
 
-        ngx_null_command
+        { ngx_string("aws_virtual_hosted_style_url"),
+          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+          ngx_conf_set_flag_slot,
+          NGX_HTTP_LOC_CONF_OFFSET,
+          offsetof(ngx_http_aws_auth_conf_t, virtual_hosted_style_url),
+          NULL },
+
+        { ngx_string("aws_path_style_url"),
+          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+          ngx_conf_set_flag_slot,
+          NGX_HTTP_LOC_CONF_OFFSET,
+          offsetof(ngx_http_aws_auth_conf_t, path_style_url),
+          NULL },
 };
 
 static ngx_http_module_t ngx_http_aws_auth_module_ctx = {
@@ -123,11 +137,16 @@ ngx_http_aws_auth_create_loc_conf(ngx_conf_t *cf) {
         return NGX_CONF_ERROR;
     }
 
+    conf->virtual_hosted_style_url = NGX_CONF_UNSET;
+    conf->path_style_url = NGX_CONF_UNSET;
+
     return conf;
 }
 
 static char *
 ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
+    ngx_str_t tmp;
+
     ngx_http_aws_auth_conf_t *prev = parent;
     ngx_http_aws_auth_conf_t *conf = child;
 
@@ -137,6 +156,22 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_str_value(conf->endpoint, prev->endpoint, "s3.amazonaws.com");
     ngx_conf_merge_str_value(conf->bucket_name, prev->bucket_name, "");
     ngx_conf_merge_str_value(conf->signature_version, prev->signature_version, "v4");
+    ngx_conf_merge_value(conf->virtual_hosted_style_url, prev->virtual_hosted_style_url, 0);
+    ngx_conf_merge_value(conf->path_style_url, prev->path_style_url, 0);
+
+    if (ngx_strncmp(conf->signature_version.data, "v4", 2) == 0 && conf->signing_key.len > 0)
+    {
+        tmp.len = conf->signing_key.len + 5;
+        tmp.data = ngx_palloc(cf->pool, conf->signing_key.len + 5);
+        ngx_snprintf(tmp.data, tmp.len, "AWS4%s", conf->signing_key.data);
+
+        ngx_pfree (cf->pool, conf->signing_key.data);
+        conf->signing_key.len = tmp.len;
+        conf->signing_key.data = ngx_palloc(cf->pool, tmp.len);
+        ngx_memcpy(conf->signing_key.data, tmp.data, tmp.len);
+    } else {
+        ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");        
+    }
 
     if (conf->signing_key_decoded.data == NULL) {
         conf->signing_key_decoded.data = ngx_pcalloc(cf->pool, 100);
@@ -233,6 +268,7 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
 static ngx_int_t
 ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     ngx_http_aws_auth_conf_t *conf = ngx_http_get_module_loc_conf(r, ngx_http_aws_auth_module);
+
     if (!conf->enabled) {
         /* return directly if module is not enabled */
         return NGX_DECLINED;
@@ -283,7 +319,8 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     const ngx_array_t *headers_out = ngx_aws_auth__sign_v4(r->pool, r,
                                                            ctx,
                                                            &conf->access_key, &conf->signing_key, &conf->key_scope,
-                                                           &conf->bucket_name, &conf->endpoint);
+                                                           &conf->bucket_name, &conf->endpoint, 
+                                                           conf->virtual_hosted_style_url, conf->path_style_url);
 
     if (headers_out == NULL) {
         return NGX_ERROR;
@@ -311,6 +348,51 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         h->lowcase_key = hv->key.data; /* We ensure that header names are already lowercased */
         h->value = hv->value;
     }
+
+
+    ngx_table_elt_t                 *header;
+    ngx_list_part_t                 *part;
+
+    part = &r->headers_in.headers.part;
+    header = part->elts;
+
+    for (i = 0; /* void */; i++) {
+
+        if (i >= part->nelts) {
+            if (part->next == NULL) {
+                break;
+            }
+
+            part = part->next;
+            header = part->elts;
+            i = 0;
+        }
+
+        if (header[i].key.len == sizeof("User-Agent") - 1
+            && ngx_strncasecmp(header[i].key.data,
+                               (u_char *) "User-Agent",
+                               sizeof("User-Agent") - 1) == 0)
+        {
+            ngx_pfree(r->pool, header[i].value.data);
+            header[i].value = USER_AGENT_VALUE;
+
+
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+               "AAAAAAA header name %s, value %s", header[i].key.data, header[i].value.data);
+
+            return NGX_OK;
+        }
+    }
+
+    h = ngx_list_push(&r->headers_in.headers);
+    if (h == NULL) {
+        return NGX_ERROR;
+    }
+
+    h->hash = 1;
+    h->key = USER_AGENT_HEADER;
+    h->lowcase_key = USER_AGENT_HEADER.data;
+    h->value = USER_AGENT_VALUE;    
 
     return NGX_OK;
 }
