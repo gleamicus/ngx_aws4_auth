@@ -293,7 +293,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     for (i = 0; i < headers_out->nelts; i++) {
         hv = (header_pair_t *) ((u_char *) headers_out->elts + headers_out->size * i);
         ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-                       "header name %s, value %s", hv->key.data, hv->value.data);
+                       "header name %V, value %V", &(hv->key), &(hv->value));
 
         if (ngx_strncmp(hv->key.data, HOST_HEADER.data, hv->key.len) == 0) {
             /* host header is controlled by proxy pass directive and hence
