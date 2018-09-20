@@ -149,21 +149,6 @@ static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
     return retval;
 }
 
-
-static inline const ngx_str_t *ngx_aws_auth__host_from_bucket(
-        ngx_pool_t *pool,
-        const ngx_str_t *s3_bucket) {
-    static const char HOST_PATTERN[] = ".s3.amazonaws.com";
-    ngx_str_t *host;
-
-    host = ngx_palloc(pool, sizeof(ngx_str_t));
-    host->len = s3_bucket->len + sizeof(HOST_PATTERN) + 1;
-    host->data = ngx_palloc(pool, host->len);
-host->len = ngx_snprintf(host->data, host->len, "%V%s", s3_bucket, HOST_PATTERN) - host->data;
-
-    return host;
-}
-
 static inline struct AwsCanonicalHeaderDetails ngx_aws_auth__canonize_headers(
         ngx_pool_t *pool,
         const ngx_http_request_t *req,
@@ -190,16 +175,18 @@ static inline struct AwsCanonicalHeaderDetails ngx_aws_auth__canonize_headers(
 
     header_ptr = ngx_array_push(settable_header_array);
     header_ptr->key = HOST_HEADER;
-    header_ptr->value.len = s3_bucket->len + 60;
-    header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
+
 
     if (path_style_url) {
-
+        header_ptr->value.len = s3_endpoint->len + 1;
+        header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
         //TODO: New host
         header_ptr->value.len =
-                ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V.%V", s3_bucket, s3_endpoint) -
+                ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V", s3_endpoint) -
                 header_ptr->value.data;        
     } else {
+        header_ptr->value.len = s3_bucket->len + s3_endpoint->len + 1;
+        header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
         header_ptr->value.len =
                 ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V.%V", s3_bucket, s3_endpoint) -
                 header_ptr->value.data;
@@ -355,7 +342,8 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
     const ngx_str_t *url = ngx_aws_auth__canon_url(pool, req);
 
     retval.canon_request = ngx_palloc(pool, sizeof(ngx_str_t));
-    retval.canon_request->len = 10000;
+    retval.canon_request->len = 5 + http_method->len + url->len + canon_qs->len + canon_headers.canon_header_str->len +
+                                canon_headers.signed_header_names->len + request_body_hash->len;
     retval.canon_request->data = ngx_palloc(pool, retval.canon_request->len);
 
     retval.canon_request->len =
@@ -436,6 +424,10 @@ ngx_aws_auth__get_signing(
         prev_pch = pch + 1;
         pch = ngx_strchr(pch + 1, '/');
         ++i;
+
+        if (pch > (char *) (key_scope_with_date->data + key_scope_with_date->len)) {
+            break;
+        }
     }
 
     if (step_binary != NULL && prev_pch != NULL) {
@@ -454,7 +446,7 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
         const ngx_str_t *s3_bucket_name,
         const ngx_str_t *s3_endpoint,
         ngx_flag_t virtual_hosted_style_url, 
-        ngx_flag_t path_style_url, 
+        ngx_flag_t path_style_url,
         const ngx_str_t *date_time) {
     struct AwsSignedRequestDetails retval;
 
@@ -496,10 +488,10 @@ static inline const ngx_array_t *ngx_aws_auth__sign_v4(
     const ngx_str_t *date = ngx_aws_auth__get_date(pool, date_time);
     // get string to sign
     ngx_str_t *key_scope_with_date = ngx_palloc(pool, sizeof(ngx_str_t));
-    key_scope_with_date->len = key_scope->len + date->len + 1;
+    key_scope_with_date->len = key_scope->len + date->len + 2;
     key_scope_with_date->data = ngx_palloc(pool, key_scope_with_date->len);
     key_scope_with_date->len =
-            ngx_snprintf(key_scope_with_date->data, key_scope_with_date->len, "%V/%V", date, key_scope) -
+            ngx_snprintf(key_scope_with_date->data, key_scope_with_date->len, "%V/%V\0", date, key_scope) -
             key_scope_with_date->data;
 
     const struct AwsSignedRequestDetails signature_details = ngx_aws_auth__compute_signature(pool, req, ctx,
