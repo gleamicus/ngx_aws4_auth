@@ -15,6 +15,8 @@ static const ngx_str_t EMPTY_STRING = ngx_null_string;
 static const ngx_str_t AMZ_HASH_HEADER = ngx_string("x-amz-content-sha256");
 static const ngx_str_t AMZ_DATE_HEADER = ngx_string("x-amz-date");
 static const ngx_str_t HOST_HEADER = ngx_string("host");
+static const ngx_str_t USER_AGENT_HEADER = ngx_string("user-agent");
+static const ngx_str_t USER_AGENT_VALUE = ngx_string("ngx_aws/2.0");
 static const ngx_str_t AUTHZ_HEADER = ngx_string("authorization");
 
 typedef struct {

@@ -43,10 +43,13 @@ Implements proxying of authenticated requests to S3.
       aws_sign;
       aws_version "v4";                                 # Default v4. Could be set into v2 or v4. v2 signature version hasn't ready yet
       aws_endpoint "s3domain";                          # without bucket name
-      aws_s3_bucket "bucketname";                       # your bucket name
+      aws_bucket "bucketname";                       # your bucket name
       aws_access_key your_aws_access_key;
-      aws_signing_key signing_key_generated_using_script;
+      aws_signing_key signing_key_generated_using_script; # WITHOUT AWS4 PREFIX!!!! This prefix will be added automatically by ngx_aws_auth
       aws_key_scope region/service/aws4_request;        # For example: "us-east-1/s3/aws4_request". The current date will be set automatically
+
+      aws_virtual_hosted_style_url on;                  # Will form host header for signature as aws_bucket.aws_endpoint
+      aws_virtual_hosted_style_url off;                 # Will form host header for signature as aws_endpoint
     }
   }
 ```
