@@ -154,7 +154,9 @@ static inline struct AwsCanonicalHeaderDetails ngx_aws_auth__canonize_headers(
         const ngx_http_request_t *req,
         const ngx_str_t *s3_bucket, const ngx_str_t *amz_date,
         const ngx_str_t *content_hash,
-        const ngx_str_t *s3_endpoint) {
+        const ngx_str_t *s3_endpoint,
+        ngx_flag_t virtual_hosted_style_url,
+        ngx_flag_t path_style_url) {
     size_t header_names_size = 1, header_nameval_size = 1;
     size_t i, used;
     u_char *buf_progress;
@@ -173,11 +175,22 @@ static inline struct AwsCanonicalHeaderDetails ngx_aws_auth__canonize_headers(
 
     header_ptr = ngx_array_push(settable_header_array);
     header_ptr->key = HOST_HEADER;
-    header_ptr->value.len = s3_bucket->len + s3_endpoint->len + 1;
-    header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
-    header_ptr->value.len =
-            ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V.%V", s3_bucket, s3_endpoint) -
-            header_ptr->value.data;
+
+
+    if (path_style_url) {
+        header_ptr->value.len = s3_endpoint->len + 1;
+        header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
+        //TODO: New host
+        header_ptr->value.len =
+                ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V", s3_endpoint) -
+                header_ptr->value.data;        
+    } else {
+        header_ptr->value.len = s3_bucket->len + s3_endpoint->len + 1;
+        header_ptr->value.data = ngx_palloc(pool, header_ptr->value.len);
+        header_ptr->value.len =
+                ngx_snprintf(header_ptr->value.data, header_ptr->value.len, "%V.%V", s3_bucket, s3_endpoint) -
+                header_ptr->value.data;
+    }
 
     ngx_qsort(settable_header_array->elts, (size_t) settable_header_array->nelts,
               sizeof(header_pair_t), ngx_aws_auth__cmp_hnames);
@@ -310,7 +323,8 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
         ngx_pool_t *pool,
         const ngx_http_request_t *req,
         ngx_http_data_input_ctx_t *ctx,
-        const ngx_str_t *s3_bucket_name, const ngx_str_t *amz_date, const ngx_str_t *s3_endpoint) {
+        const ngx_str_t *s3_bucket_name, const ngx_str_t *amz_date, const ngx_str_t *s3_endpoint,
+        ngx_flag_t virtual_hosted_style_url, ngx_flag_t path_style_url) {
     struct AwsCanonicalRequestDetails retval;
 
     // canonize query string
@@ -320,7 +334,8 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
     const ngx_str_t *request_body_hash = ngx_aws_auth__request_body_hash(pool, req, ctx);
 
     const struct AwsCanonicalHeaderDetails canon_headers =
-            ngx_aws_auth__canonize_headers(pool, req, s3_bucket_name, amz_date, request_body_hash, s3_endpoint);
+            ngx_aws_auth__canonize_headers(pool, req, s3_bucket_name, amz_date, request_body_hash, 
+                s3_endpoint, virtual_hosted_style_url, path_style_url);
     retval.signed_header_names = canon_headers.signed_header_names;
 
     const ngx_str_t *http_method = &(req->method_name);
@@ -336,6 +351,8 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
                          http_method, url, canon_qs, canon_headers.canon_header_str,
                          canon_headers.signed_header_names, request_body_hash) - retval.canon_request->data;
     retval.header_list = canon_headers.header_list;
+
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "canon_request: %V", retval.canon_request);
 
     return retval;
 }
@@ -407,7 +424,7 @@ ngx_aws_auth__get_signing(
 
         prev_position = position + 1;
         prev_pch = pch + 1;
-        pch = strchr(pch + 1, '/');
+        pch = ngx_strchr(pch + 1, '/');
         ++i;
 
         if (pch > (char *) (key_scope_with_date->data + key_scope_with_date->len)) {
@@ -430,6 +447,8 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
         const ngx_str_t *key_scope_with_date,
         const ngx_str_t *s3_bucket_name,
         const ngx_str_t *s3_endpoint,
+        ngx_flag_t virtual_hosted_style_url, 
+        ngx_flag_t path_style_url,
         const ngx_str_t *date_time) {
     struct AwsSignedRequestDetails retval;
 
@@ -440,7 +459,8 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
     }
 
     const struct AwsCanonicalRequestDetails canon_request =
-            ngx_aws_auth__make_canonical_request(pool, req, ctx, s3_bucket_name, date_time, s3_endpoint);
+            ngx_aws_auth__make_canonical_request(pool, req, ctx, s3_bucket_name, date_time, 
+                s3_endpoint, virtual_hosted_style_url, path_style_url);
 
     const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
     const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope_with_date, date_time,
@@ -462,11 +482,12 @@ static inline const ngx_array_t *ngx_aws_auth__sign_v4(
         const ngx_str_t *signing_key,
         const ngx_str_t *key_scope,
         const ngx_str_t *s3_bucket_name,
-        const ngx_str_t *s3_endpoint) {
+        const ngx_str_t *s3_endpoint,
+        ngx_flag_t virtual_hosted_style_url, 
+        ngx_flag_t path_style_url) {
     // get dates
     const ngx_str_t *date_time = ngx_aws_auth__compute_request_time(pool, &req->start_sec);
     const ngx_str_t *date = ngx_aws_auth__get_date(pool, date_time);
-
     // get string to sign
     ngx_str_t *key_scope_with_date = ngx_palloc(pool, sizeof(ngx_str_t));
     key_scope_with_date->len = key_scope->len + date->len + 2;
@@ -479,7 +500,9 @@ static inline const ngx_array_t *ngx_aws_auth__sign_v4(
                                                                                              signing_key,
                                                                                              key_scope_with_date,
                                                                                              s3_bucket_name,
-                                                                                             s3_endpoint, date_time);
+                                                                                             s3_endpoint,
+                                                                                             virtual_hosted_style_url,
+                                                                                             path_style_url, date_time);
     if (signature_details.signature == NULL) {
         return NULL;
     }
