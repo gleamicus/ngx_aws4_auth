@@ -66,15 +66,10 @@ static inline const ngx_str_t *ngx_aws_auth__compute_request_time(ngx_pool_t *po
 
 static inline int ngx_aws_auth__cmp_hnames(const void *one, const void *two) {
     header_pair_t *first, *second;
-    int ret;
+    
     first = (header_pair_t *) one;
     second = (header_pair_t *) two;
-    ret = ngx_strncmp(first->key.data, second->key.data, ngx_min(first->key.len, second->key.len));
-    if (ret != 0) {
-        return ret;
-    } else {
-        return (first->key.len - second->key.len);
-    }
+    return ngx_strncmp(first->key.data, second->key.data, ngx_max(first->key.len, second->key.len));
 }
 
 static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
@@ -85,7 +80,7 @@ static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
     ngx_str_t *retval = ngx_palloc(pool, sizeof(ngx_str_t));
 
     header_pair_t *qs_arg;
-    ngx_array_t *query_string_args = ngx_array_create(pool, 0, sizeof(header_pair_t));
+    ngx_array_t *query_string_args = ngx_array_create(pool, 5, sizeof(header_pair_t));
 
     if (req->args.len == 0) {
         return &EMPTY_STRING;
@@ -108,9 +103,10 @@ static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
         }
 
         len = equal - p;
-        qs_arg->key.data = ngx_palloc(pool, len * 3);
-        qs_arg->key.len = (u_char *) ngx_escape_uri(qs_arg->key.data, p, len, NGX_ESCAPE_ARGS) - qs_arg->key.data;
+	u_char * temp_buf = ngx_palloc(pool, len * 3);
 
+        qs_arg->key.len = (u_char *) ngx_escape_uri(temp_buf, p, len, NGX_ESCAPE_ARGS) - temp_buf;
+	qs_arg->key.data = temp_buf;
 
         len = ampersand - equal;
         if (len > 0) {
@@ -128,6 +124,8 @@ static inline const ngx_str_t *ngx_aws_auth__canonize_query_string(
               sizeof(header_pair_t), ngx_aws_auth__cmp_hnames);
 
     retval->data = ngx_palloc(pool, req->args.len * 3 + query_string_args->nelts * 2);
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "request args length: %d", req->args.len);
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "query string args nelts: %d", query_string_args->nelts);
     retval->len = 0;
 
     for (i = 0; i < query_string_args->nelts; i++) {
