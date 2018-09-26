@@ -279,14 +279,15 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         return NGX_DECLINED;
     }
 
-    if (r->method == NGX_HTTP_POST) {
-        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: POST request hasn't been supported yet");
-        return NGX_DECLINED;
-    }
+//    if (r->method == NGX_HTTP_POST) {
+//        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: POST request hasn't been supported yet");
+//        return NGX_DECLINED;
+//    }
 
     ngx_http_data_input_ctx_t *ctx = NULL;
 
-    if (r->method == NGX_HTTP_PUT) {
+    if (r->method == NGX_HTTP_PUT || (r->method == NGX_HTTP_POST && r->headers_in.content_length != NULL &&
+                                      r->headers_in.content_length->value.data != NULL)) {
         if (r->headers_in.content_type == NULL || r->headers_in.content_type->value.data == NULL) {
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: no Content-Type header found");
             return NGX_DECLINED;
