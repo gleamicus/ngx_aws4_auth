@@ -225,9 +225,16 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
     ctx->body_sha256->len = len;
     ctx->body_sha256->data = ngx_palloc(r->pool, len);
     last_body_chain = ctx->body_sha256->data;
-    for (in = r->request_body->bufs; in; in = in->next) {
+
+    in = r->request_body->bufs;
+    if (!in) {
+        return ngx_http_finalize_request(r, NGX_OK);
+    }
+
+    for (; in; in = in->next) {
         if (!in->buf->in_file) {
             last_body_chain = ngx_copy(last_body_chain, in->buf->pos, in->buf->last - in->buf->pos);
+            ngx_http_finalize_request(r, NGX_DONE);
             continue;
         }
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -262,7 +269,6 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
         ngx_http_finalize_request(r, rc);
         return;
     }
-    ngx_http_finalize_request(r, NGX_OK);
 }
 
 static ngx_int_t
