@@ -67,6 +67,18 @@ system such as saltstack, puppet, chef, etc. etc. to distribute the signing
 keys to your nginx clusters. Do not forget to HUP the server after placing the new
 signing key as nginx reads the configuration only at startup time.
 
+## Supported cases
+
+* GET objects and buckets
+* PUT objects and buckets
+* PUT COPY objects
+* DELETE objects
+* ACL on objects
+* GET big files and any files using HTTP ranges
+* PUT mulitpart (support for uploading big files)
+* HEAD objects
+* OPTIONS on objects and buckets
+
 ## Known limitations
 The 2.x version of the module hasn't support POST multipart form data yet. Use PUT HTTP method to create objects
 
