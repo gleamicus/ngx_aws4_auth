@@ -22,7 +22,7 @@ static const ngx_str_t AUTHZ_HEADER = ngx_string("authorization");
 typedef struct {
     unsigned waiting_more_body:1;
     off_t len;
-    ngx_str_t * body_sha256;
+    ngx_str_t *body_sha256;
 } ngx_http_data_input_ctx_t;
 
 #endif //NGX_AWS_AUTH_AWS_VARS_H

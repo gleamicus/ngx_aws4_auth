@@ -33,67 +33,67 @@ typedef struct {
 
 static ngx_command_t ngx_http_aws_auth_commands[] = {
         { ngx_string("aws_access_key"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_conf_set_str_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, access_key),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_conf_set_str_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, access_key),
+                NULL },
 
         { ngx_string("aws_key_scope"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_conf_set_str_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, key_scope),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_conf_set_str_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, key_scope),
+                NULL },
 
         { ngx_string("aws_signing_key"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_conf_set_str_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, signing_key),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_conf_set_str_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, signing_key),
+                NULL },
 
         { ngx_string("aws_endpoint"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_http_aws_endpoint,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, endpoint),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_http_aws_endpoint,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, endpoint),
+                NULL },
 
         { ngx_string("aws_bucket"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_conf_set_str_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, bucket_name),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_conf_set_str_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, bucket_name),
+                NULL },
 
         { ngx_string("aws_sign"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS,
-          ngx_http_aws_sign,
-          0,
-          0,
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS,
+                ngx_http_aws_sign,
+                0,
+                0,
+                NULL },
 
         { ngx_string("aws_version"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-          ngx_conf_set_str_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, signature_version),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
+                ngx_conf_set_str_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, signature_version),
+                NULL },
 
         { ngx_string("aws_virtual_hosted_style_url"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
-          ngx_conf_set_flag_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, virtual_hosted_style_url),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+                ngx_conf_set_flag_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, virtual_hosted_style_url),
+                NULL },
 
         { ngx_string("aws_path_style_url"),
-          NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
-          ngx_conf_set_flag_slot,
-          NGX_HTTP_LOC_CONF_OFFSET,
-          offsetof(ngx_http_aws_auth_conf_t, path_style_url),
-          NULL },
+                NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+                ngx_conf_set_flag_slot,
+                NGX_HTTP_LOC_CONF_OFFSET,
+                offsetof(ngx_http_aws_auth_conf_t, path_style_url),
+                NULL },
 };
 
 static ngx_http_module_t ngx_http_aws_auth_module_ctx = {
@@ -159,18 +159,17 @@ ngx_http_aws_auth_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child) {
     ngx_conf_merge_value(conf->virtual_hosted_style_url, prev->virtual_hosted_style_url, 0);
     ngx_conf_merge_value(conf->path_style_url, prev->path_style_url, 0);
 
-    if (ngx_strncmp(conf->signature_version.data, "v4", 2) == 0 && conf->signing_key.len > 0)
-    {
+    if (ngx_strncmp(conf->signature_version.data, "v4", 2) == 0 && conf->signing_key.len > 0) {
         tmp.len = conf->signing_key.len + 5;
         tmp.data = ngx_palloc(cf->pool, conf->signing_key.len + 5);
         ngx_snprintf(tmp.data, tmp.len, "AWS4%s", conf->signing_key.data);
 
-        ngx_pfree (cf->pool, conf->signing_key.data);
+        ngx_pfree(cf->pool, conf->signing_key.data);
         conf->signing_key.len = tmp.len;
         conf->signing_key.data = ngx_palloc(cf->pool, tmp.len);
         ngx_memcpy(conf->signing_key.data, tmp.data, tmp.len);
     } else {
-        ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");        
+        ngx_conf_merge_str_value(conf->signing_key, prev->signing_key, "");
     }
 
     if (conf->signing_key_decoded.data == NULL) {
@@ -209,8 +208,8 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
 
     if (ctx->waiting_more_body) {
         ctx->waiting_more_body = 0;
-
         ngx_http_core_run_phases(r);
+        ngx_http_finalize_request(r, NGX_OK);
         return;
     }
 
@@ -234,7 +233,9 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
     for (; in; in = in->next) {
         if (!in->buf->in_file) {
             last_body_chain = ngx_copy(last_body_chain, in->buf->pos, in->buf->last - in->buf->pos);
-            ngx_http_finalize_request(r, NGX_DONE);
+            if (!in->next) {
+                ngx_http_finalize_request(r, NGX_DONE);
+            }
             continue;
         }
         ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
@@ -243,6 +244,8 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
                       "client_body_buffer_size setting");
         ngx_buf_t *b = ngx_create_temp_buf(r->pool, NGX_OFF_T_LEN);
         if (b == NULL) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                          "[can't create temp buffer] NGX_HTTP_INTERNAL_SERVER_ERROR");
             ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
             return;
         }
@@ -257,6 +260,7 @@ inline void ngx_http_data_read(ngx_http_request_t *r) {
         ngx_int_t rc = ngx_http_send_header(r);
 
         if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) {
+            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "[can't send header]");
             ngx_http_finalize_request(r, rc);
             return;
         }
@@ -294,10 +298,10 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
 
     if (r->method == NGX_HTTP_PUT || (r->method == NGX_HTTP_POST && r->headers_in.content_length != NULL &&
                                       r->headers_in.content_length->value.data != NULL)) {
-/*        if (r->headers_in.content_type == NULL || r->headers_in.content_type->value.data == NULL) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: no Content-Type header found");
-            return NGX_DECLINED;
-        }*/
+//        if (r->headers_in.content_type == NULL || r->headers_in.content_type->value.data == NULL) {
+//            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "aws_sign module: no Content-Type header found");
+//            return NGX_DECLINED;
+//        }
         ctx = ngx_pcalloc(r->pool, sizeof(ngx_http_data_input_ctx_t));
         ngx_int_t rc;
         if (ctx == NULL) {
@@ -312,9 +316,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         if (rc == NGX_ERROR || rc >= NGX_HTTP_SPECIAL_RESPONSE) {
             ngx_http_finalize_request(r, NGX_ERROR);
             return rc;
-        }
-
-        if (rc == NGX_AGAIN) {
+        } else if (rc == NGX_AGAIN) {
             ctx->waiting_more_body = 1;
             return NGX_DONE;
         }
@@ -326,7 +328,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     const ngx_array_t *headers_out = ngx_aws_auth__sign_v4(r->pool, r,
                                                            ctx,
                                                            &conf->access_key, &conf->signing_key, &conf->key_scope,
-                                                           &conf->bucket_name, &conf->endpoint, 
+                                                           &conf->bucket_name, &conf->endpoint,
                                                            conf->virtual_hosted_style_url, conf->path_style_url);
 
     if (headers_out == NULL) {
@@ -357,8 +359,8 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     }
 
 
-    ngx_table_elt_t                 *header;
-    ngx_list_part_t                 *part;
+    ngx_table_elt_t *header;
+    ngx_list_part_t *part;
 
     part = &r->headers_in.headers.part;
     header = part->elts;
@@ -378,14 +380,13 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
         if (header[i].key.len == sizeof("User-Agent") - 1
             && ngx_strncasecmp(header[i].key.data,
                                (u_char *) "User-Agent",
-                               sizeof("User-Agent") - 1) == 0)
-        {
+                               sizeof("User-Agent") - 1) == 0) {
             ngx_pfree(r->pool, header[i].value.data);
             header[i].value = USER_AGENT_VALUE;
 
 
             ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-               "AAAAAAA header name %s, value %s", header[i].key.data, header[i].value.data);
+                           "AAAAAAA header name %s, value %s", header[i].key.data, header[i].value.data);
 
             return NGX_OK;
         }
@@ -399,7 +400,7 @@ ngx_http_aws_proxy_sign(ngx_http_request_t *r) {
     h->hash = 1;
     h->key = USER_AGENT_HEADER;
     h->lowcase_key = USER_AGENT_HEADER.data;
-    h->value = USER_AGENT_VALUE;    
+    h->value = USER_AGENT_VALUE;
 
     return NGX_OK;
 }
