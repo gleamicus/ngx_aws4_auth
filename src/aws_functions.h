@@ -363,6 +363,7 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
 
 static inline const ngx_str_t *ngx_aws_auth__string_to_sign(
         ngx_pool_t *pool,
+        const ngx_http_request_t *req,
         const ngx_str_t *key_scope, const ngx_str_t *date, const ngx_str_t *canon_request_hash) {
     ngx_str_t *retval = ngx_palloc(pool, sizeof(ngx_str_t));
 
@@ -370,6 +371,8 @@ static inline const ngx_str_t *ngx_aws_auth__string_to_sign(
     retval->data = ngx_palloc(pool, retval->len);
     retval->len = ngx_snprintf(retval->data, retval->len, "AWS4-HMAC-SHA256\n%V\n%V\n%V", date, key_scope,
                                canon_request_hash) - retval->data;
+
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "string_to_sign: %V", retval);
 
     return retval;
 }
@@ -414,6 +417,7 @@ ngx_aws_auth__get_signing(
     int position = 0;
     prev_pch = (char *) key_scope_with_date->data;
     pch = ngx_strchr(key_scope_with_date->data, '/');
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "[signing] string %V", key_scope_with_date);
     int i = 0;
     while (pch != NULL) {
         position = (u_char *) pch - key_scope_with_date->data;
@@ -421,9 +425,16 @@ ngx_aws_auth__get_signing(
         if (i == 0) {
             step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch, position - prev_position,
                                                                    signing_key);
+
+            ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "[signing] signing_key %V: %V", signing_key,
+                          ngx_aws_auth__sign_hmac_sha256_data_only_hex(pool, (u_char *) prev_pch,
+                                                                       position - prev_position, signing_key));
         } else {
             step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch, position - prev_position,
                                                                    step_binary);
+            ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "[signing] step %d: %V", i,
+                          ngx_aws_auth__sign_hmac_sha256_data_only_hex(pool, (u_char *) prev_pch,
+                                                                       position - prev_position, step_binary));
         }
 
         prev_position = position + 1;
@@ -431,7 +442,7 @@ ngx_aws_auth__get_signing(
         pch = ngx_strchr(pch + 1, '/');
         ++i;
 
-        if (pch > (char *) (key_scope_with_date->data + key_scope_with_date->len)) {
+        if (i > 2 || pch > (char *) (key_scope_with_date->data + key_scope_with_date->len)) {
             break;
         }
     }
@@ -439,6 +450,10 @@ ngx_aws_auth__get_signing(
     if (step_binary != NULL && prev_pch != NULL) {
         step_binary = ngx_aws_auth__sign_hmac_sha256_data_only(pool, (u_char *) prev_pch,
                                                                key_scope_with_date->len - prev_position, step_binary);
+        ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "[signing] last step %d: %V", i,
+                      ngx_aws_auth__sign_hmac_sha256_data_only_hex(pool, (u_char *) prev_pch,
+                                                                   key_scope_with_date->len - prev_position,
+                                                                   step_binary));
     }
 
     return step_binary;
@@ -467,10 +482,11 @@ static inline struct AwsSignedRequestDetails ngx_aws_auth__compute_signature(
                                                  s3_endpoint, virtual_hosted_style_url, path_style_url);
 
     const ngx_str_t *canon_request_hash = ngx_aws_auth__hash_sha256(pool, canon_request.canon_request);
-    const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, key_scope_with_date, date_time,
+    const ngx_str_t *string_to_sign = ngx_aws_auth__string_to_sign(pool, req, key_scope_with_date, date_time,
                                                                    canon_request_hash);
     const ngx_str_t *kSigningBinary = ngx_aws_auth__get_signing(pool, req, key_scope_with_date, signing_key);
     const ngx_str_t *signature = ngx_aws_auth__sign_sha256_hex(pool, string_to_sign, kSigningBinary);
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "[signing] signature: %V", signature);
 
     retval.signature = signature;
     retval.signed_header_names = canon_request.signed_header_names;

@@ -14,4 +14,7 @@ ngx_str_t *ngx_aws_auth__sign_hmac_sha256(ngx_pool_t *pool, const ngx_str_t *blo
 ngx_str_t *ngx_aws_auth__sign_hmac_sha256_data_only(
         ngx_pool_t *pool, const u_char *data, const int len, const ngx_str_t *signing_key);
 
+ngx_str_t *ngx_aws_auth__sign_hmac_sha256_data_only_hex(
+        ngx_pool_t *pool, const u_char *data, const int len, const ngx_str_t *signing_key);
+
 #endif

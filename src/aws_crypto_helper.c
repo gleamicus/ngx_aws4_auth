@@ -73,6 +73,24 @@ ngx_str_t *ngx_aws_auth__sign_hmac_sha256_data_only(
     return retval;
 }
 
+ngx_str_t *ngx_aws_auth__sign_hmac_sha256_data_only_hex(
+        ngx_pool_t *pool, const u_char *data, const int len, const ngx_str_t *signing_key) {
+
+    unsigned int md_len;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
+
+    if (evp_md == NULL) {
+        evp_md = EVP_sha256();
+    }
+
+    HMAC(evp_md, signing_key->data, signing_key->len, data, len, md, &md_len);
+    retval->data = ngx_palloc(pool, md_len);
+    retval->len = md_len;
+    ngx_hex_dump(retval->data, md, md_len);
+    return retval;
+}
+
 ngx_str_t *ngx_aws_auth__hash_sha256(ngx_pool_t *pool, const ngx_str_t *blob) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     ngx_str_t *const retval = ngx_palloc(pool, sizeof(ngx_str_t));
