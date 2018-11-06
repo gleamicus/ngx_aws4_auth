@@ -1,13 +1,9 @@
 #!/usr/bin/env python
 from datetime import datetime
 from hashlib import sha1
-import hmac
-import sys
+import hmac, base64
 
-try:
-    from urllib.request import Request, urlopen, HTTPError  # Python 3
-except:
-    from urllib2 import Request, urlopen, HTTPError  # Python 2
+from urllib.request import Request, urlopen, HTTPError  # Python 3
 
 '''
 Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;
@@ -53,9 +49,9 @@ def str_to_sign_v2(method, vhost_mode, bucket, url):
 
 def v2sign(key, method, vhost_mode, bucket, url):
     raw = str_to_sign_v2(method, vhost_mode, bucket, url)
-    print "String to sign is\n----------------------\n%s\n---------------------\n" % raw['s2s']
-    retval = hmac.new(key, raw['s2s'], sha1)   
-    return {'sign': retval.digest().encode("base64").rstrip("\n"),
+    print ("String to sign is\n----------------------\n%s\n---------------------\n" % raw['s2s'])
+    retval = hmac.new(key, raw['s2s'].encode('utf-8'), sha1)
+    return {'sign': base64.b64encode(retval.digest()).decode('utf-8').rstrip("\n"),
         'headers': raw['headers']}
 
 def az_h(ak, key, method, vhost_mode, bucket, url):
@@ -65,26 +61,28 @@ def az_h(ak, key, method, vhost_mode, bucket, url):
     return sig['headers']
 
 
-def get_data(ak, key, method, vhost_mode, bucket, url):
+def get_data(host, ak, key, method, vhost_mode, bucket, url):
     if vhost_mode:
-        rurl = "http://%s.s3.amazonaws.com%s" % (bucket, url)
+        rurl = "http://{0}/{1}/{2}".format(host, bucket, url)
     else:
-        rurl = "http://s3.amazonaws.com%s" % (url)
+        rurl = "http://{0}/{1}/{2}".format(host, bucket, url)
     q = Request(rurl)
     headers = az_h(ak, key, method, vhost_mode, bucket, url)
-    print 'About to make a request'
-    print url
-    print headers
-    for k,v in headers.iteritems():
+    print ('About to make a request')
+    print (url)
+    print (headers)
+    for k,v in headers.items():
         q.add_header(k, v)
     try:
         return urlopen(q).read()
     except HTTPError as e:
-        print 'Got exception', e
+        print ('Got exception', e)
 
 
 if __name__ == "__main__":
-    ak = sys.argv[1]
-    k = sys.argv[2]
-    print get_data(ak, k, "GET", True, "hw.anomalizer", "/lock.txt")
-    print get_data(ak, k, "GET", False, "hw.anomalizer", "/hw.anomalizer/nq.c")
+    endpoint = '10.236.32.71:8080'
+    access_key = '7OF97P4N9ISW3C3W4LLF'
+    secret_key = b'WXMJGwWzDypOPoJ0uC5wGNoDpeZ32FbMYWSjv8yt'
+    bucket_name = 'replica'
+    url = 'test-small.txt?response-content-type=application%2Fjson'
+    print (get_data(endpoint, access_key, secret_key, "GET", True, bucket_name, url).decode('utf-8'))

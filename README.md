@@ -33,7 +33,7 @@ Implements proxying of authenticated requests to S3.
     # This is an example that use specific s3 endpoint, default endpoint is s3.amazonaws.com
     location /s3_beijing {
       client_max_body_size 100m;
-      client_body_buffer_size 1m;
+      client_body_buffer_size 100m;
 	
       proxy_http_version 1.1;
       proxy_set_header Connection "";                   # anable keep-alive support with client
