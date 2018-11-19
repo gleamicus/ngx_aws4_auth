@@ -1,8 +1,5 @@
 # AWS proxy module
 
-[![Build Status](https://travis-ci.org/anomalizer/ngx_aws_auth.svg?branch=master)](https://travis-ci.org/anomalizer/ngx_aws_auth)
- [![Gitter chat](https://badges.gitter.im/anomalizer/ngx_aws_auth.png)](https://gitter.im/ngx_aws_auth/Lobby?utm_source=share-link&utm_medium=link&utm_campaign=share-link)
-
 This nginx module can proxy requests to authenticated S3 backends using Amazon's
 V4 authentication API. The first version of this module was written for the V2
 authentication protocol and can be found in the *AuthV2* branch.
@@ -81,9 +78,3 @@ signing key as nginx reads the configuration only at startup time.
 
 ## Known limitations
 The 2.x version of the module hasn't support POST multipart form data yet. Use PUT HTTP method to create objects
-
-
-## Credits
-Original idea based on http://nginx.org/pipermail/nginx/2010-February/018583.html and suggestion of moving to variables rather than patching the proxy module.
-
-Subsequent contributions can be found in the commit logs of the project.
