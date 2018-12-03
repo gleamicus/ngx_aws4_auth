@@ -70,7 +70,7 @@ static ngx_command_t ngx_http_aws_auth_commands[] = {
         { ngx_string("aws_sign"),
                 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_NOARGS,
                 ngx_http_aws_sign,
-                0,
+                NGX_HTTP_LOC_CONF_OFFSET,
                 0,
                 NULL },
 
@@ -94,6 +94,8 @@ static ngx_command_t ngx_http_aws_auth_commands[] = {
                 NGX_HTTP_LOC_CONF_OFFSET,
                 offsetof(ngx_http_aws_auth_conf_t, path_style_url),
                 NULL },
+
+        ngx_null_command
 };
 
 static ngx_http_module_t ngx_http_aws_auth_module_ctx = {
