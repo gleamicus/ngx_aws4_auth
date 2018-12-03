@@ -3,7 +3,6 @@
 import boto.s3.connection
 from urllib.parse import urlencode, quote_plus
 
-
 c = boto.s3.connection.S3Connection(
     host='10.236.32.71', port=9090, is_secure=False,
     aws_access_key_id='7OF97P4N9ISW3C3W4LLF',
