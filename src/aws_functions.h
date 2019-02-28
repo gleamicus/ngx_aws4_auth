@@ -270,6 +270,28 @@ static inline void ngx_aws_auth__escape_uri(ngx_pool_t *pool, ngx_str_t *src) {
         return;
     }
 
+
+    // We need to escape manually HTTP encoding for the file or folder name.
+    // Otherwise, it won't be coded correctly
+/*    ngx_str_t *temp_string = ngx_palloc (pool, sizeof(ngx_str_t));
+    temp_string->data = ngx_palloc (pool, src->len);
+    temp_string->len = 0;
+
+    u_char *src_ptr = src->data;
+    u_char *dst_ptr = temp_string->data;
+
+    for(i = 0; i < src->len; ++i) {
+	if (ngx_strncmp("%3B", src_ptr, 3) == 0) {
+		ngx_memcpy(dst_ptr, ";", 1);
+		src_ptr += 3;
+	} else {
+		ngx_memcpy(dst_ptr, src_ptr, 1);
+		src_ptr++;
+	}
+	dst_ptr++;
+	temp_string->len++;
+    }
+*/
     // each escaped character is replaced by 3 characters
     escaped_data_len = src->len + escaped_count * 2;
     escaped_data = ngx_palloc(pool, escaped_data_len);
@@ -282,7 +304,10 @@ static inline void ngx_aws_auth__escape_uri(ngx_pool_t *pool, ngx_str_t *src) {
             if (j < escaped_data_len - 2 && strncmp((char *) (escaped_data + j), "%2F", 3) == 0) {
                 escaped_data[i] = '/';
                 j += 3;
-            } else {
+            //} else if (j < escaped_data_len - 2 && strncmp((char *) (escaped_data + j), "%3B", 3) == 0) {
+              //  escaped_data[i] = ';';
+                //j += 3;
+ 	    } else {
                 escaped_data[i] = escaped_data[j];
                 j++;
             }
@@ -349,6 +374,11 @@ static inline struct AwsCanonicalRequestDetails ngx_aws_auth__make_canonical_req
     retval.canon_request->len = 5 + http_method->len + url->len + canon_qs->len + canon_headers.canon_header_str->len +
                                 canon_headers.signed_header_names->len + request_body_hash->len;
     retval.canon_request->data = ngx_palloc(pool, retval.canon_request->len);
+
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "url: %V", url);
+
+    ngx_log_error(NGX_LOG_DEBUG, req->connection->log, 0, "canon_qs: %V", canon_qs);
+
 
     retval.canon_request->len =
             ngx_snprintf(retval.canon_request->data, retval.canon_request->len, "%V\n%V\n%V\n%V\n%V\n%V",
