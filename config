@@ -1,6 +1,6 @@
 ngx_addon_name=ngx_http_aws_auth
 
-if test -n "$ngx_module_link"; then
+if [ $ngx_module_link = DYNAMIC ] ; then
     ngx_module_type=HTTP
     ngx_module_name=ngx_http_aws_auth_module
     ngx_module_incs=
@@ -9,7 +9,7 @@ if test -n "$ngx_module_link"; then
     ngx_module_libs="$CORE_LIBS -lssl"
 
     . auto/module
-else
+elif [ $ngx_module_link = ADDON ] ; then
    HTTP_MODULES="$HTTP_MODULES ngx_http_aws_auth_module"
    NGX_ADDON_SRCS="$NGX_ADDON_SRCS $ngx_addon_dir/src/ngx_http_aws_auth.c $ngx_addon_dir/src/aws_crypto_helper.c"
    CORE_LIBS="$CORE_LIBS -lssl"
